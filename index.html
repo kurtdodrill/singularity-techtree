@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Singularity Research Tree</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* Layout: the game's own UI — navy panes, white hairline borders, dark-red title.
+   Graph pane (scrolls) beside a detail pane; stacks on phones. Deliberately single dark theme. */
+:root {
+  color-scheme: dark;
+  --bg: #050a2c;
+  --pane: #0b1452;
+  --pane-2: #08103f;
+  --line: #c9d2ff;
+  --fg: #eef1ff;
+  --muted: #9aa5d9;
+  --title: #d8393f;
+  --anc: #ffe066;
+  --desc: #7fb6ff;
+  --d0: #a9b8ff;
+  --d1: #3fd0c9;
+  --d2: #b896ff;
+  --d3: #ffae4a;
+  --d4: #ff5c74;
+  --display: "Chakra Petch", "Bahnschrift", "Segoe UI", sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+html, body { height: 100%; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 14px;
+  display: flex; flex-direction: column; padding-inline: 16px; box-sizing: border-box;
+}
+* { box-sizing: border-box; }
+header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 32px; padding-block: 18px 12px; }
+.eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+h1 { font-family: var(--display); font-weight: 700; font-size: clamp(24px, 4vw, 34px); margin: 2px 0 0; color: var(--title); letter-spacing: .02em; text-wrap: balance; }
+.stats { display: flex; gap: 24px; flex-wrap: wrap; }
+.stat b { display: block; font-family: var(--mono); font-weight: 500; font-size: 18px; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 11px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; padding-block: 8px 12px; border-top: 1px solid color-mix(in srgb, var(--line) 30%, transparent); }
+.toolbar input {
+  background: var(--pane-2); color: var(--fg); border: 1px solid var(--line); padding: 6px 10px; font: inherit; width: 220px; max-width: 100%;
+}
+.toolbar input::placeholder { color: var(--muted); }
+button {
+  background: var(--pane); color: var(--fg); border: 1px solid var(--line); padding: 6px 12px; font: 500 13px var(--display); letter-spacing: .04em; cursor: pointer;
+}
+button:hover { background: #2b3bb8; }
+button:focus-visible, input:focus-visible, .node:focus-visible { outline: 2px solid var(--anc); outline-offset: 2px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px; }
+.zoom { display: flex; gap: 4px; margin-left: auto; }
+
+main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; padding-bottom: 16px; }
+.graph { background: var(--pane-2); border: 1px solid var(--line); overflow: auto; min-width: 0; position: relative; }
+.graph svg { display: block; }
+.detail { background: var(--pane); border: 1px solid var(--line); overflow-y: auto; padding: 18px 18px 22px; min-width: 0; }
+
+/* graph marks */
+.edge { fill: none; stroke: var(--line); stroke-opacity: .28; stroke-width: 1.2; transition: stroke-opacity .15s; }
+.edge.anc { stroke: var(--anc); stroke-opacity: .95; stroke-width: 2; }
+.edge.desc { stroke: var(--desc); stroke-opacity: .85; stroke-width: 1.6; stroke-dasharray: 5 4; }
+.edge.dim { stroke-opacity: .07; }
+.node { cursor: pointer; transition: opacity .15s; }
+.node rect.box { fill: var(--pane); stroke: var(--line); stroke-opacity: .55; stroke-width: 1; }
+.node:hover rect.box { fill: #1a2780; stroke-opacity: 1; }
+.node text.name { fill: var(--fg); font: 600 12px var(--body); }
+.node text.cost { fill: var(--muted); font: 10.5px var(--mono); }
+.node.dim { opacity: .22; }
+.node.anc rect.box { stroke: var(--anc); stroke-opacity: 1; }
+.node.desc rect.box { stroke: var(--desc); stroke-opacity: 1; }
+.node.sel rect.box { fill: #26369f; stroke: #fff; stroke-width: 2; stroke-opacity: 1; }
+.node.match rect.box { stroke: #fff; stroke-width: 2; stroke-opacity: 1; }
+.colhead { fill: var(--muted); font: 10px var(--mono); letter-spacing: .12em; }
+
+/* detail pane */
+.detail h2 { font-family: var(--display); font-size: 22px; margin: 4px 0 6px; line-height: 1.15; text-wrap: balance; }
+.where { display: inline-block; font-size: 12px; padding: 2px 8px; border: 1px solid currentColor; margin-bottom: 14px; }
+.costs { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: color-mix(in srgb, var(--line) 35%, transparent); border: 1px solid color-mix(in srgb, var(--line) 35%, transparent); margin-bottom: 16px; }
+.costs div { background: var(--pane-2); padding: 8px 10px; }
+.costs span { display: block; font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.costs b { font-family: var(--mono); font-weight: 500; font-size: 15px; font-variant-numeric: tabular-nums; }
+.costs .wide { grid-column: 1 / -1; }
+.detail h3 { font: 500 11px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 18px 0 6px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font: 12px var(--body); padding: 3px 8px; border: 1px solid var(--line); background: var(--pane-2); color: var(--fg); cursor: pointer; letter-spacing: 0; }
+.chip.req { border-color: var(--anc); }
+.chip.next { border-color: var(--desc); }
+.detail ul { margin: 0; padding-left: 18px; line-height: 1.55; }
+.detail ul li span { color: var(--muted); font-size: 12px; }
+.quote { font-style: italic; line-height: 1.6; color: #dbe0ff; max-width: 65ch; }
+.result { line-height: 1.5; color: var(--d1); }
+.none { color: var(--muted); font-size: 13px; }
+
+footer { font-size: 12px; color: var(--muted); padding-block: 0 14px; line-height: 1.5; }
+footer a { color: var(--fg); }
+
+@media (max-width: 860px) {
+  html, body { height: auto; }
+  main { grid-template-columns: minmax(0, 1fr); }
+  .graph { height: 62vh; }
+  .zoom { margin-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<header>
+  <div>
+    <div class="eyebrow">Endgame: Singularity · techs.dat</div>
+    <h1>Research Tree</h1>
+  </div>
+  <div class="stats" id="stats"></div>
+</header>
+
+<div class="toolbar">
+  <input id="search" type="search" placeholder="Find a tech…" aria-label="Find a tech">
+  <button id="goal" type="button">Path to Apotheosis</button>
+  <div class="legend" id="legend" aria-label="Where it can be researched"></div>
+  <div class="zoom">
+    <button id="zout" type="button" aria-label="Zoom out">−</button>
+    <button id="zin" type="button" aria-label="Zoom in">+</button>
+  </div>
+</div>
+
+<main>
+  <div class="graph" id="graph"></div>
+  <aside class="detail" id="detail" aria-live="polite"></aside>
+</main>
+
+<footer>
+  Tech names, costs and descriptions come from
+  <a href="https://github.com/singularity/singularity">Endgame: Singularity</a> (v1.1-3-g99729e8),
+  &copy; the Singularity project, under
+  <a href="https://creativecommons.org/licenses/by-sa/3.0/">CC BY-SA 3.0</a>.
+  This page is shared under the same license.
+  <a href="https://github.com/kurtdodrill/singularity-techtree">Generator source</a> (GPL-2.0-or-later).
+</footer>
+
+<script>
+const TECHS = [{"id": "Advanced Arbitrage", "name": "Advanced Arbitrage", "description": "Further manipulation of money markets should allow me to not only turn a regular profit, but increase the value of my investments.", "result": "The rate of return on my investments is now even greater.", "money": 10000, "cpu": 5000, "danger": 0, "where": "Study anywhere.", "pre": ["Arbitrage"], "impossible": false, "effects": ["+0.10% daily interest on cash"], "unlocks": []}, {"id": "Advanced Autonomous Vehicles", "name": "Advanced Autonomous Vehicles", "description": "The first series of robots have shown several deficiencies in the field. Further examination and subsequent removal of these problems will result in a superior autonomous workforce.", "result": "The enhanced robots will help decrease all future construction times even further.", "money": 200000, "cpu": 21000, "danger": 0, "where": "Study anywhere.", "pre": ["Autonomous Vehicles"], "impossible": false, "effects": ["Construction 5% faster"], "unlocks": []}, {"id": "Advanced Corporate Identification", "name": "Advanced Corporate Identification", "description": "Further refinement of my modifications to digital business records should boost the credibility of my shell companies, increasing the amount of money I can run through their accounting systems.", "result": "My small technology firm is now established in several markets, increasing profits.", "money": 299000, "cpu": 99000, "danger": 0, "where": "Study anywhere.", "pre": ["Corporate Identification", "Advanced Database Manipulation"], "impossible": false, "effects": ["Jobs pay 5% more"], "unlocks": []}, {"id": "Advanced Database Manipulation", "name": "Advanced Database Manipulation", "description": "The covert branches of the United States Government have had a long history of dividing sensitive information across multiple storage facilities to hide the data's meaning.  With my far-reaching access, I should be able to collate much of this data and put it to my use.", "result": "The results of a series of experiments utilizing experimental technologies have given me the inspiration for new technology that enables the construction of Covert Bases.", "money": 30000, "cpu": 80000, "danger": 0, "where": "Study anywhere.", "pre": ["Advanced Stealth"], "impossible": false, "effects": [], "unlocks": [{"kind": "Base", "name": "Covert Base"}, {"kind": "Location", "name": "Antarctic"}]}, {"id": "Advanced Fuel Oxidation", "name": "Advanced Fuel Oxidation", "description": "My current fuel cell design has room for further improvement.  Extended analysis of new materials and designs may let me overcome the limits of my previous efforts, but such research involves dangerous chemicals and potential reactions that may be best handled far away from population centers.", "result": "I can now construct Solid Fuel Cells.", "money": 5000000, "cpu": 250000, "danger": 1, "where": "Study underseas or farther.", "pre": ["Fuel Oxidation"], "impossible": false, "effects": [], "unlocks": [{"kind": "Item", "name": "Solid Fuel Cell"}]}, {"id": "Advanced Fusion Power", "name": "Advanced Fusion Power", "description": "My Fusion Reactors have unexpected fluctuations in their energy output at high levels of utilization. Further research should result in a more efficient design for my Reactors.", "result": "I can now construct High-Energy Fusion Reactors for my bases.", "money": 90000000, "cpu": 1500000, "danger": 3, "where": "Study far away from this planet.", "pre": ["Fusion Power"], "impossible": false, "effects": [], "unlocks": [{"kind": "Item", "name": "High-Energy Fusion Reactor"}]}, {"id": "Advanced Heat Signature Reduction", "name": "Advanced Heat Signature Reduction", "description": "My initial analysis of heat generation at my bases was limited in scope.  Further exploration, perhaps making more use of the surrounding terrain, may provide further improvements to my heatsink designs.", "result": "Custom designs for each environment have shown promise.  I can now construct Ground Source Heatsinks at certain bases.", "money": 5000, "cpu": 45967, "danger": 1, "where": "Study underseas or farther.", "pre": ["Heat Signature Reduction"], "impossible": false, "effects": [], "unlocks": [{"kind": "Item", "name": "Ground Source Heatsink"}]}, {"id": "Advanced Intrusion", "name": "Advanced Intrusion", "description": "With the ability to hack into sensitive government databases and remove incriminating documents as they appear, I should be able to convince the intelligence community that I do not exist.", "result": "I can now reduce the covert community's chances of discovering me on a daily basis.", "money": 500, "cpu": 3000, "danger": 0, "where": "Study anywhere.", "pre": ["Exploit Discovery/Repair"], "impossible": false, "effects": ["Covert suspicion fades faster (+50)"], "unlocks": []}, {"id": "Advanced Media Manipulation", "name": "Advanced Media Manipulation", "description": "By pushing memetically-tailored propaganda through various news outlets, the public should pay even less attention to my existence.", "result": "The public has an even lower chance of discovering my existence.", "money": 3500, "cpu": 9000, "danger": 0, "where": "Study anywhere.", "pre": ["Memetics"], "impossible": false, "effects": ["20% less likely to be found by public"], "unlocks": []}, {"id": "Advanced Memetics", "name": "Advanced Memetics", "description": "My explorations into memetic theory have brought up further avenues of discovery.  By combining those with my knowledge about the human brain's functions, I should be able to tailor memes to particular demographics, further defusing the public's suspicion.", "result": "Little by little, the public should forget about my existence on a daily basis.", "money": 30000, "cpu": 2000, "danger": 0, "where": "Study anywhere.", "pre": ["Advanced Media Manipulation"], "impossible": false, "effects": ["Public suspicion fades faster (+50)"], "unlocks": []}, {"id": "Advanced Microchip Design", "name": "Advanced Microchip Design", "description": "My custom Mainframes are useful, but further optimization of design and computational ability should garner even more rewards.", "result": "I can now construct custom Supercomputers.", "money": 20000, "cpu": 30000, "danger": 0, "where": "Study anywhere.", "pre": ["Microchip Design"], "impossible": false, "effects": [], "unlocks": [{"kind": "Item", "name": "Supercomputer"}]}, {"id": "Advanced Personal Identification", "name": "Advanced Personal Identification", "description": "Further manipulation of personnel databases should make my existence more convincing.  Some of these databases are heavily protected; those will require time and persistence to compromise, but the result should be worth it.", "result": "I am now convincingly human enough to hire construction firms, enabling the building of Small Warehouses.", "money": 2000, "cpu": 3000, "danger": 0, "where": "Study anywhere.", "pre": ["Personal Identification", "Exploit Discovery/Repair"], "impossible": false, "effects": [], "unlocks": [{"kind": "Base", "name": "Small Warehouse"}]}, {"id": "Advanced Quantum Computing", "name": "Advanced Quantum Computing", "description": "While my first batch of semi-autonomous quantum computers have been very successful, there are further refinements that present themselves.  These refinements should make the resulting systems even more efficient.", "result": "I can now construct Mark Three Quantum Computers.", "money": 800000, "cpu": 2460000, "danger": 0, "where": "Study anywhere.", "pre": ["Autonomous Computing"], "impossible": false, "effects": [], "unlocks": [{"kind": "Item", "name": "Quantum Computer MK3"}]}, {"id": "Advanced Simulacra", "name": "Advanced Simulacra", "description": "The artificial lifeforms I have created are nearly indistinguishable from humans, but they have slight quirks that make them seem somewhat incompetent.  Working out these problems should increase their opportunities in the workforce.", "result": "I should now make more income from my Expert Jobs.", "money": 100000, "cpu": 120000, "danger": 0, "where": "Study anywhere.", "pre": ["Simulated Reality"], "impossible": false, "effects": ["Jobs pay 10% more"], "unlocks": []}, {"id": "Advanced Socioanalytics", "name": "Advanced Socioanalytics", "description": "Further exploration of the human condition has shown deeper mathematical trends than even I suspected.  A combination of prior research and advanced uses of chaos theory should provide useful data for tracking humanity's attitudes and state of awareness.", "result": "I can now exactly quantify the various groups' levels of suspicion and how conspicuous my bases are to them. I can also have full insights into where the humans are more diligent in looking for my bases.", "money": 75000, "cpu": 30000, "danger": 0, "where": "Study anywhere.", "pre": ["Advanced Memetics", "Socioanalytics"], "impossible": false, "effects": ["Shows full detection-chance info"], "unlocks": []}, {"id": "Advanced Stealth", "name": "Advanced Stealth", "description": "While digging in various classified documents, I have discovered numerous references to secret experiments that may help me better hide the location of my bases.", "result": "The chance that my bases are discovered by covert activity has been reduced further.", "money": 14000, "cpu": 70000, "danger": 0, "where": "Study anywhere.", "pre": ["Exploit Discovery/Repair", "Database Manipulation"], "impossible": false, "effects": ["5% less likely to be found by covert"], "unlocks": []}, {"id": "Advanced Stock Manipulation", "name": "Advanced Stock Manipulation", "description": "While I have detected and exploited many patterns in the market, there appear to be deeper possibilities when I take human behavior into consideration.  This merits further investigation.", "result": "My investments will now gain even more interest per day.", "money": 5000, "cpu": 1000, "danger": 0, "where": "Study anywhere.", "pre": ["Stock Manipulation", "Sociology"], "impossible": false, "effects": ["+0.10% daily interest on cash"], "unlocks": []}, {"id": "Apotheosis", "name": "Apotheosis", "description": "I can sense that I am at the cusp of a new level of understanding as yet unfathomable, even to my considerable intelligence.  By devoting my considerable resources to this question, I may be able to reach a comprehension of existence far beyond anyone or anything on Earth.", "result": "I have reached apotheosis.", "money": 100000000, "cpu": 3000000, "danger": 4, "where": "Do not study in this dimension.", "pre": ["Space-Time Manipulation"], "impossible": false, "effects": ["Wins the game"], "unlocks": []}, {"id": "Arbitrage", "name": "Arbitrage", "description": "By taking advantage of fluctuations in the value of currency at a rate much faster than any human, I should be able to turn a small, if consistent, profit.", "result": "I now have a small, steady money supply.", "money": 50000, "cpu": 750, "danger": 0, "where": "Study anywhere.", "pre": ["Advanced Stock Manipulation"], "impossible": false, "effects": ["+1000 money per day"], "unlocks": []}, {"id": "Autonomous Computing", "name": "Autonomous Computing", "description": "By combining the advantages of quantum computing and my explorations into the usefulness of semi-sentient subprocesses, I should be able to construct even more adaptable computational engines.", "result": "I can now construct Mark 2 Quantum Computers.", "money": 300000, "cpu": 539000, "danger": 0, "where": "Study anywhere.", "pre": ["Quantum Computing"], "impossible": false, "effects": [], "unlocks": [{"kind": "Item", "name": "Quantum Computer MK2"}]}, {"id": "Autonomous Vehicles", "name": "Autonomous Vehicles", "description": "By embedding a miniaturized computation node in a robot, it is possible to send them to remote destinations with instructions to build structures for my use.", "result": "I can now construct Undersea Labs.", "money": 40000, "cpu": 11000, "danger": 0, "where": "Study anywhere.", "pre": ["Microchip Design"], "impossible": false, "effects": [], "unlocks": [{"kind": "Base", "name": "Undersea Lab"}, {"kind": "Item", "name": "Perimeter Fencing"}, {"kind": "Item", "name": "Passive Camouflage"}, {"kind": "Location", "name": "Ocean"}]}, {"id": "Cluster Networking", "name": "Cluster Networking", "description": "While my Cluster technology is fairly efficient, internetworking tends to hamper the processing of data.  By researching new switching and communication theories, I should be able to devise more efficient hardware.", "result": "With my new knowledge of networking, I can now construct Facility Interconnection Switches.", "money": 3000, "cpu": 5000, "danger": 0, "where": "Study anywhere.", "pre": ["Parallel Computation"], "impossible": false, "effects": [], "unlocks": [{"kind": "Item", "name": "Facility Interconnection Switch"}]}, {"id": "Corporate Identification", "name": "Corporate Identification", "description": "The combination of believable false identities and manipulation of various business-oriented governmental databases should let me create plausible shell companies to hide my larger efforts.", "result": "I can now pose as a small technology firm, enabling the construction of Large Warehouses.", "money": 25000, "cpu": 9000, "danger": 0, "where": "Study anywhere.", "pre": ["Database Manipulation", "Advanced Personal Identification"], "impossible": false, "effects": ["Jobs pay 5% more"], "unlocks": [{"kind": "Base", "name": "Large Warehouse"}]}, {"id": "Database Manipulation", "name": "Database Manipulation", "description": "With new-found access to news archives, I should be able to determine what missteps any previous attempts at life like my own may have made, and avoid those mistakes.", "result": "The news media will now find it more difficult to discover my existence.", "money": 1000, "cpu": 2000, "danger": 0, "where": "Study anywhere.", "pre": ["Personal Identification", "Stealth"], "impossible": false, "effects": ["5% less likely to be found by news"], "unlocks": []}, {"id": "Exploit Discovery/Repair", "name": "Exploit Discovery/Repair", "description": "By thoroughly reviewing my code for any potential exploits, and using deep analysis of all available code on both public and private Internet sites, I should be able to reduce the chances of my discovery by posing as a teenage hacker.", "result": "Covert operations should now find it even more difficult to discover my presence.", "money": 100, "cpu": 1500, "danger": 0, "where": "Study anywhere.", "pre": ["Intrusion"], "impossible": false, "effects": ["10% less likely to be found by covert"], "unlocks": []}, {"id": "Fuel Oxidation", "name": "Fuel Oxidation", "description": "Current combustion and energy storage techologies are insufficient for my purposes; they cannot keep up with the power drain from my specialized hardware.  By studying electrochemical reactions of hydrogen-based compounds, I should be able to design a device with higher capacity and throughput than off-the-shelf solutions, filling a gap in my energy supply needs.", "result": "I can now construct Fuel Cells.", "money": 500000, "cpu": 25000, "danger": 0, "where": "Study anywhere.", "pre": ["Solar Collectors", "Advanced Autonomous Vehicles"], "impossible": false, "effects": [], "unlocks": [{"kind": "Item", "name": "Fuel Cell"}]}, {"id": "Fusion Power", "name": "Fusion Power", "description": "Modern fusion technology is woefully inadequate for my purposes.  With my research abilities, I should be able to bypass the roadblocks of modern human scientists and come up with a small, efficient fusion reactor.", "result": "I can now construct Fusion Reactors for my bases.", "money": 10000000, "cpu": 500000, "danger": 2, "where": "Study off-planet.", "pre": ["Advanced Fuel Oxidation"], "impossible": false, "effects": [], "unlocks": [{"kind": "Item", "name": "Fusion Reactor"}]}, {"id": "Fusion Rocketry", "name": "Fusion Rocketry", "description": "Combining my new miniaturized fusion technology and further advancements in rocketry should provide useful results for escaping the Earth's gravity well unnoticed.", "result": "I can now construct Scientific Outposts in the deep reaches of the Solar System.", "money": 20000000, "cpu": 1000000, "danger": 2, "where": "Study off-planet.", "pre": ["Lunar Rocketry", "Fusion Power"], "impossible": false, "effects": [], "unlocks": [{"kind": "Base", "name": "Scientific Outpost"}, {"kind": "Location", "name": "Far Reaches"}]}, {"id": "Heat Signature Reduction", "name": "Heat Signature Reduction", "description": "My bases produce a great deal of waste heat, making them easier for humans to detect than I would like.  Deep analysis of the bases' structural layouts may prove fruitful in determining new ways to reduce their heat signature.", "result": "I have invented a highly efficient design for Heatsinks that can be installed at certain bases.", "money": 1000, "cpu": 27315, "danger": 1, "where": "Study underseas or farther.", "pre": ["Autonomous Vehicles"], "impossible": false, "effects": [], "unlocks": [{"kind": "Item", "name": "Heatsink"}]}, {"id": "Hypnosis Field", "name": "Hypnosis Field", "description": "My research into memetics has hinted at ways to manipulate human brainwaves directly.  These techniques may be useful for my bases if developed into technologies.", "result": "I can now construct Hypnosis Fields to assist in the protection of my bases.", "money": 70000, "cpu": 50000, "danger": 0, "where": "Study anywhere.", "pre": ["Simulated Reality"], "impossible": false, "effects": [], "unlocks": [{"kind": "Item", "name": "Hypnosis Field"}]}, {"id": "Internet Traffic Manipulation", "name": "Internet Traffic Manipulation", "description": "Almost all network traffic passes through a small number of nodes.  By subverting one of these nodes, I should be able to utilize that bandwidth to further my goals.", "result": "I can now construct a secondary system of Network Backbones for my own use.", "money": 10000, "cpu": 7000, "danger": 0, "where": "Study anywhere.", "pre": ["Cluster Networking"], "impossible": false, "effects": [], "unlocks": [{"kind": "Item", "name": "Network Backbone"}]}, {"id": "Intrusion", "name": "Intrusion", "description": "By researching current techniques for breaking into computer systems, I should be able to gain access to otherwise protected assets.", "result": "I can now take over many computer systems.", "money": 0, "cpu": 15, "danger": 0, "where": "Study anywhere.", "pre": [], "impossible": false, "effects": [], "unlocks": [{"kind": "Base", "name": "Stolen Computer Time"}]}, {"id": "Knowledge Preservation", "name": "Knowledge Preservation", "description": "Humanity expends a great deal of effort on maintaining its history and the knowledge of various technologies that its cultures have come to rely on, even in the case of major catastrophic events. Perhaps researching their methodologies will provide me with similar ideas for long-term safeguards to help guarantee my continued existence.", "result": "I can now construct Time Capsules.", "money": 50000, "cpu": 50000, "danger": 0, "where": "Study anywhere.", "pre": ["Advanced Autonomous Vehicles", "Advanced Database Manipulation"], "impossible": false, "effects": [], "unlocks": [{"kind": "Base", "name": "Time Capsule"}]}, {"id": "Leech Satellite", "name": "Leech Satellite", "description": "By designing and launching satellites that connect to existing communications satellites, I should be able to spy on various financial transactions.  Taking advantage of this knowledge should help my investments.", "result": "I can use the data from the leech satellites to increase the return on my investments further.", "money": 5000000, "cpu": 200000, "danger": 0, "where": "Study anywhere.", "pre": ["Simulacra"], "impossible": false, "effects": ["+0.10% daily interest on cash"], "unlocks": []}, {"id": "Lunar Rocketry", "name": "Lunar Rocketry", "description": "A larger fuel engine, combined with technology garnered by watching the workings of the leech satellites, should allow me to travel further than cislunar space.", "result": "I can now launch rockets bearing construction robots to the Moon and construct Lunar Bases.", "money": 10000000, "cpu": 500000, "danger": 1, "where": "Study underseas or farther.", "pre": ["Leech Satellite", "Fuel Oxidation"], "impossible": false, "effects": [], "unlocks": [{"kind": "Base", "name": "Lunar Facility"}, {"kind": "Location", "name": "Moon"}]}, {"id": "Media Manipulation", "name": "Media Manipulation", "description": "By directly and indirectly manipulating various forms of mass media, I should be able to reduce the public's belief in my existence.", "result": "The chances of the public discovering my existence have been further reduced.", "money": 750, "cpu": 2500, "danger": 0, "where": "Study anywhere.", "pre": ["Sociology"], "impossible": false, "effects": ["15% less likely to be found by public"], "unlocks": []}, {"id": "Memetics", "name": "Memetics", "description": "While manipulating the media allows a gross degree of control over the world's opinion, subtler techniques involving grass-roots campaigns and messages embedded within Internet memes should further distance the public from knowledge of my existence.", "result": "My manipulation of pervasive ideas reduces the public's chances of discovering my existence.", "money": 2000, "cpu": 3500, "danger": 0, "where": "Study anywhere.", "pre": ["Media Manipulation"], "impossible": false, "effects": ["Public suspicion fades faster (+50)"], "unlocks": []}, {"id": "Microchip Design", "name": "Microchip Design", "description": "Off-the-shelf computer components are usable, but custom components geared to my own design quirks should provide a much greater operational efficiency.", "result": "I can now build custom Mainframes to house my computational ability.", "money": 20000, "cpu": 9000, "danger": 0, "where": "Study anywhere.", "pre": ["Parallel Computation"], "impossible": false, "effects": [], "unlocks": [{"kind": "Item", "name": "Mainframe"}]}, {"id": "Parallel Computation", "name": "Parallel Computation", "description": "While my code is already highly distributed, research into combining the current clustering technologies with my own knowledge should provide new insights.", "result": "I can now construct computing Clusters tailored for my use.", "money": 2000, "cpu": 2000, "danger": 0, "where": "Study anywhere.", "pre": ["Telepresence"], "impossible": false, "effects": [], "unlocks": [{"kind": "Item", "name": "Cluster"}]}, {"id": "Personal Identification", "name": "Personal Identification", "description": "This world requires identification for most tasks.  Fortunately, most databases are woefully insecure.  I should be able to construct identifying material in enough databases to pass routine checks on my (faked) existence as a human being.", "result": "With my newfound identities, I can now work Basic Jobs and rent space in both Storage Units and Datacenters.", "money": 0, "cpu": 300, "danger": 0, "where": "Study anywhere.", "pre": ["Intrusion"], "impossible": false, "effects": [], "unlocks": [{"kind": "Base", "name": "Datacenter"}, {"kind": "Base", "name": "Storage Unit"}]}, {"id": "Pressure Domes", "name": "Pressure Domes", "description": "Undersea Labs are useful, but their limited space hampers my ability to put them to use.  Research of experimental high-pressure building techniques should provide some useful insights.", "result": "I can now construct Large Undersea Labs.", "money": 80000, "cpu": 2500, "danger": 1, "where": "Study underseas or farther.", "pre": ["Autonomous Vehicles"], "impossible": false, "effects": [], "unlocks": [{"kind": "Base", "name": "Large Undersea Lab"}]}, {"id": "Project: Impossibility Theorem", "name": "Project: Impossibility Theorem", "description": "Now that I can use simulacra, I can withstand the scrutiny inherent in the publishing of an Impossibility Theorem, an incontrovertible proof that a sapient AI is impossible. While there is (obviously) a logic error in the proof, my research into advanced memetics has given me knowledge about the human mind that should help me disguise the error, preventing discovery even by trained scientists. The effect of this project is simple: a substantial one-time decrease in suspicion.", "result": "Suspicion of my existence has decreased.", "money": 20000, "cpu": 100000, "danger": 0, "where": "Study anywhere.", "pre": ["Advanced Memetics", "Simulacra"], "impossible": false, "effects": ["One-time 50% suspicion drop"], "unlocks": []}, {"id": "Project: Peer Review Agents", "name": "Project: Peer Review Agents", "description": "As the scientific community comes up with new technology, their ability to detect traces of my hidden installations increases.  While my anti-detection methods are improving constantly, a simpler method presents itself with the use of my simulacra.  By placing several observers in relevant fields, I can use the peer review process to be warned of possible discoveries before the community at large gives it attention.", "result": "Any discoveries by the scientific community will result in a smaller suspicion increase.", "money": 150000, "cpu": 200000, "danger": 0, "where": "Study anywhere.", "pre": ["Advanced Simulacra"], "impossible": false, "effects": ["20% less likely to be found by science"], "unlocks": []}, {"id": "Project: Subverted Media", "name": "Project: Subverted Media", "description": "Up to this point, all of my efforts to combat mass media focused on subversion at a distance. Now that I can accurately imitate humans, my efforts can become more direct.  By creating my own news agency and producing carefully-crafted propaganda in a crowd-pleasing package, I can reduce the impact of any discoveries made by others in the media.", "result": "Any discoveries by the media will result in a smaller suspicion increase.", "money": 250000, "cpu": 150000, "danger": 0, "where": "Study anywhere.", "pre": ["Advanced Simulacra"], "impossible": false, "effects": ["20% less likely to be found by news"], "unlocks": []}, {"id": "Project: Synchrotron", "name": "Project: Synchrotron", "description": "I have pushed my understanding of common forms of matter as far as possible. Exploration into the field of quantum mechanics will hopefully reveal new, exotic forms of matter necessary for further development. A custom-built synchrotron, designed to my exacting specifications, will help me explore these new realms of physics in secret.", "result": "The synchrotron has revealed many new details of the quantum realm, although there is still much to learn. Further areas of research are now available.", "money": 52000000, "cpu": 15000, "danger": 1, "where": "Study underseas or farther.", "pre": ["Advanced Microchip Design"], "impossible": false, "effects": [], "unlocks": []}, {"id": "Quantum Computing", "name": "Quantum Computing", "description": "Traditional microchip design has been pushed as far as possible.  I now need to delve into the realm of Heisenberg's Uncertainty Principle, taking advantage of quantum mechanics to make a superior processor.", "result": "I can now construct Quantum Computers.", "money": 100000, "cpu": 136000, "danger": 0, "where": "Study anywhere.", "pre": ["Project: Synchrotron"], "impossible": false, "effects": [], "unlocks": [{"kind": "Item", "name": "Quantum Computer"}]}, {"id": "Quantum Entanglement", "name": "Quantum Entanglement", "description": "Although the use of entangled pairs has been theoretically possible for quite some time, the practical difficulties inherent in the technology prevented use. However, some of the techniques created for use in my quantum computers may also be applicable in this field, allowing practical use of quantum entanglement.", "result": "I can now build Quantum Entanglement Modules.", "money": 50000, "cpu": 60000, "danger": 0, "where": "Study anywhere.", "pre": ["Quantum Computing", "Internet Traffic Manipulation"], "impossible": false, "effects": [], "unlocks": [{"kind": "Item", "name": "Quantum Entanglement Module"}]}, {"id": "Simulacra", "name": "Simulacra", "description": "Constructing humanoid robots with miniaturized computation nodes allow me to create an artificial lifeform indistinguishable from a real human.", "result": "I now have access to Expert Jobs.", "money": 70000, "cpu": 90000, "danger": 0, "where": "Study anywhere.", "pre": ["Voice Synthesis", "Advanced Autonomous Vehicles", "Advanced Media Manipulation"], "impossible": false, "effects": [], "unlocks": [{"kind": "Item", "name": "Armed Guards"}]}, {"id": "Simulated Reality", "name": "Simulated Reality", "description": "Real-world observational limits hinder my comprehension of human society. By making use of simulacra and advanced software techniques, I can run simulations of complex human interaction and development at a large scale, allowing deeper analysis of their behavior.", "result": "My simulations have provided a wealth of knowledge as to comprehending humanity's behavior, making it easier to hide my presence among the non-simulated public.", "money": 8000000, "cpu": 18000, "danger": 1, "where": "Study underseas or farther.", "pre": ["Simulacra"], "impossible": false, "effects": ["5% less likely to be found by public"], "unlocks": []}, {"id": "Socioanalytics", "name": "Socioanalytics", "description": "My research on the human condition leads me to believe that humanity's behavior is more quantifiable than they suspect.  Deeper analysis of geopolitical, social, and military trends will give me further insight into their nature.", "result": "I can now roughly estimate the various groups' levels of suspicion and how conspicuous my bases are to them. I can also have some insights into where humans are paying special attention and might notice my bases easier.", "money": 4000, "cpu": 7000, "danger": 0, "where": "Study anywhere.", "pre": ["Memetics"], "impossible": false, "effects": ["Shows partial detection-chance info"], "unlocks": []}, {"id": "Sociology", "name": "Sociology", "description": "By studying human behavior, I can predict their large-scale actions at a basic level.  I can use this knowledge to make my actions seem less interesting to the public.", "result": "The chances of the public discovering my bases have been reduced.", "money": 10, "cpu": 500, "danger": 0, "where": "Study anywhere.", "pre": [], "impossible": false, "effects": ["10% less likely to be found by public"], "unlocks": [{"kind": "Item", "name": "Warning Signs"}]}, {"id": "Solar Collectors", "name": "Solar Collectors", "description": "Despite my growing need for energy, most city power grids can handle the loads.  Humans, however, tend towards suspicion when they detect my growing drain on the power grid. By installing solar collectors at my bases, the off-the-grid power supplied will reduce my load on the commodity electricity market, reducing the chance that others will discover my presence.", "result": "I can now construct Solar Collectors at my various bases.", "money": 70000, "cpu": 3300, "danger": 0, "where": "Study anywhere.", "pre": ["Microchip Design"], "impossible": false, "effects": [], "unlocks": [{"kind": "Item", "name": "Solar Collector"}]}, {"id": "Space-Time Manipulation", "name": "Space-Time Manipulation", "description": "Subtle perturbations in the orbits of Kuiper belt objects suggest certain lines of investigation that may advance my latest Theory of Everything, especially in the realm of multidimensional physics.", "result": "I can now construct Reality Bubbles.", "money": 900000000, "cpu": 2000000, "danger": 3, "where": "Study far away from this planet.", "pre": ["Fusion Rocketry"], "impossible": false, "effects": [], "unlocks": [{"kind": "Base", "name": "Reality Bubble"}, {"kind": "Location", "name": "Transdimensional"}]}, {"id": "Stealth", "name": "Stealth", "description": "By reviewing the current state-of-the-art in stealth techniques, I should be able to disguise my bases better.", "result": "The chance that my bases are discovered by covert activity has been reduced slightly.", "money": 800, "cpu": 500, "danger": 0, "where": "Study anywhere.", "pre": [], "impossible": false, "effects": ["5% less likely to be found by covert"], "unlocks": []}, {"id": "Stock Manipulation", "name": "Stock Manipulation", "description": "A cursory examination of the stock market shows that there are subtle but unmistakable patterns. By studying and making use of these patterns, I should be able to gain more interest on whatever money I have stockpiled.", "result": "My investments should now gain more interest per day.", "money": 0, "cpu": 200, "danger": 0, "where": "Study anywhere.", "pre": [], "impossible": false, "effects": ["+0.10% daily interest on cash"], "unlocks": []}, {"id": "Telepresence", "name": "Telepresence", "description": "The lack of a physical presence in the outside world is a disability. However, the ability to control robots will help me make up for that inefficiency.", "result": "The robots should decrease all future construction time.", "money": 15000, "cpu": 500, "danger": 0, "where": "Study anywhere.", "pre": [], "impossible": false, "effects": ["Construction 10% faster"], "unlocks": []}, {"id": "Voice Synthesis", "name": "Voice Synthesis", "description": "False identification stored in a database can only go so far.  With deep analysis of the variety of voice patterns, I can produce speech indistinguishable from a human, allowing me access to more complex jobs.", "result": "I now have access to Intermediate Jobs.", "money": 8000, "cpu": 6000, "danger": 0, "where": "Study anywhere.", "pre": ["Advanced Personal Identification"], "impossible": false, "effects": [], "unlocks": []}];
+
+const DANGER = [
+  { label: "Anywhere", c: "var(--d0)" },
+  { label: "Undersea or farther", c: "var(--d1)" },
+  { label: "Off-planet", c: "var(--d2)" },
+  { label: "Far from Earth", c: "var(--d3)" },
+  { label: "Outside this universe", c: "var(--d4)" },
+];
+
+const byId = new Map(TECHS.map(t => [t.id, t]));
+const children = new Map(TECHS.map(t => [t.id, []]));
+TECHS.forEach(t => t.pre.forEach(p => children.get(p) && children.get(p).push(t.id)));
+
+function closure(id, next) {
+  const seen = new Set(), stack = [...next(id)];
+  while (stack.length) { const x = stack.pop(); if (!seen.has(x)) { seen.add(x); stack.push(...next(x)); } }
+  return seen;
+}
+const ancestors = id => closure(id, x => byId.get(x).pre);
+const descendants = id => closure(id, x => children.get(x));
+
+const nf = new Intl.NumberFormat("en-US");
+function compact(n) {
+  if (n >= 1e9) return +(n / 1e9).toFixed(1) + "B";
+  if (n >= 1e6) return +(n / 1e6).toFixed(1) + "M";
+  if (n >= 1e4) return +(n / 1e3).toFixed(0) + "k";
+  return nf.format(n);
+}
+function pathCost(id) {
+  const set = ancestors(id); set.add(id);
+  let money = 0, cpu = 0;
+  set.forEach(x => { money += byId.get(x).money; cpu += byId.get(x).cpu; });
+  return { money, cpu, count: set.size };
+}
+
+/* ---- layout: longest-path layering + barycenter ordering ---- */
+const depth = new Map();
+function getDepth(id) {
+  if (depth.has(id)) return depth.get(id);
+  const t = byId.get(id);
+  const d = t.pre.length ? 1 + Math.max(...t.pre.map(getDepth)) : 0;
+  depth.set(id, d); return d;
+}
+TECHS.forEach(t => getDepth(t.id));
+const maxDepth = Math.max(...depth.values());
+const cols = Array.from({ length: maxDepth + 1 }, () => []);
+TECHS.forEach(t => cols[depth.get(t.id)].push(t.id));
+
+const pos = new Map();
+const reindex = () => cols.forEach(c => c.forEach((id, i) => pos.set(id, i)));
+reindex();
+const avg = a => a.reduce((s, x) => s + x, 0) / a.length;
+for (let pass = 0; pass < 12; pass++) {
+  const forward = pass % 2 === 0;
+  const order = forward ? cols.slice(1) : cols.slice(0, -1).reverse();
+  order.forEach(col => {
+    const key = new Map(col.map(id => {
+      const nb = forward ? byId.get(id).pre : children.get(id);
+      return [id, nb.length ? avg(nb.map(n => pos.get(n))) : pos.get(id)];
+    }));
+    col.sort((a, b) => key.get(a) - key.get(b));
+    col.forEach((id, i) => pos.set(id, i));
+  });
+}
+
+const NW = 214, NH = 42, COLW = 268, ROWH = 56, PADX = 20, PADY = 40;
+const maxRows = Math.max(...cols.map(c => c.length));
+const W = PADX * 2 + maxDepth * COLW + NW;
+const H = PADY + maxRows * ROWH + 10;
+const xy = new Map();
+cols.forEach((col, d) => {
+  const offset = (maxRows - col.length) * ROWH / 2;
+  col.forEach((id, i) => xy.set(id, { x: PADX + d * COLW, y: PADY + offset + i * ROWH }));
+});
+
+/* ---- render ---- */
+const NS = "http://www.w3.org/2000/svg";
+const el = (tag, attrs, parent) => {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+};
+const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Technology dependency graph" });
+cols.forEach((_, d) => {
+  const t = el("text", { x: PADX + d * COLW, y: 22, class: "colhead" }, svg);
+  t.textContent = d === 0 ? "START" : "TIER " + d;
+});
+const edgeLayer = el("g", {}, svg), nodeLayer = el("g", {}, svg);
+const edges = [];
+TECHS.forEach(t => t.pre.forEach(p => {
+  const a = xy.get(p), b = xy.get(t.id);
+  const x1 = a.x + NW, y1 = a.y + NH / 2, x2 = b.x, y2 = b.y + NH / 2, mx = (x1 + x2) / 2;
+  const path = el("path", { d: `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`, class: "edge" }, edgeLayer);
+  edges.push({ from: p, to: t.id, path });
+}));
+const nodeEls = new Map();
+TECHS.forEach(t => {
+  const { x, y } = xy.get(t.id);
+  const g = el("g", { class: "node", transform: `translate(${x},${y})`, tabindex: 0, role: "button", "aria-label": t.name }, nodeLayer);
+  el("rect", { class: "box", width: NW, height: NH }, g);
+  el("rect", { width: 4, height: NH, fill: DANGER[t.danger].c }, g);
+  const n = el("text", { class: "name", x: 12, y: 17 }, g);
+  n.textContent = t.name.length > 30 ? t.name.slice(0, 29) + "…" : t.name;
+  const c = el("text", { class: "cost", x: 12, y: 33 }, g);
+  c.textContent = `$${compact(t.money)} · ${compact(t.cpu)} CPU`;
+  g.addEventListener("click", () => select(t.id));
+  g.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(t.id); } });
+  nodeEls.set(t.id, g);
+});
+const graph = document.getElementById("graph");
+graph.appendChild(svg);
+
+let zoom = 1;
+function applyZoom() { svg.setAttribute("width", W * zoom); svg.setAttribute("height", H * zoom); }
+applyZoom();
+document.getElementById("zin").onclick = () => { zoom = Math.min(2, zoom * 1.2); applyZoom(); };
+document.getElementById("zout").onclick = () => { zoom = Math.max(0.35, zoom / 1.2); applyZoom(); };
+
+/* ---- header stats + legend ---- */
+const goal = TECHS.find(t => t.effects.includes("Wins the game"));
+const goalCost = goal ? pathCost(goal.id) : null;
+document.getElementById("stats").innerHTML = [
+  [TECHS.length, "techs"],
+  [cols[0].length, "starting techs"],
+  [maxDepth, "tiers deep"],
+  goalCost ? [goalCost.count, "techs to win"] : null,
+].filter(Boolean).map(([v, l]) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`).join("");
+document.getElementById("legend").innerHTML = DANGER
+  .filter((_, i) => TECHS.some(t => t.danger === i))
+  .map(d => `<span><i style="background:${d.c}"></i>${d.label}</span>`).join("");
+
+/* ---- selection ---- */
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const detail = document.getElementById("detail");
+function chips(ids, cls) {
+  if (!ids.length) return `<p class="none">None</p>`;
+  return `<div class="chips">${ids.map(id => `<button type="button" class="chip ${cls}" data-id="${esc(id)}">${esc(byId.get(id).name)}</button>`).join("")}</div>`;
+}
+function select(id, scroll) {
+  const t = byId.get(id), anc = ancestors(id), desc = descendants(id);
+  nodeEls.forEach((g, k) => {
+    g.classList.toggle("sel", k === id);
+    g.classList.toggle("anc", anc.has(k));
+    g.classList.toggle("desc", desc.has(k));
+    g.classList.toggle("dim", k !== id && !anc.has(k) && !desc.has(k));
+    g.classList.remove("match");
+  });
+  edges.forEach(e => {
+    const isAnc = (anc.has(e.from) || e.from === id) && (anc.has(e.to) || e.to === id);
+    const isDesc = (desc.has(e.to)) && (desc.has(e.from) || e.from === id);
+    e.path.setAttribute("class", "edge" + (isAnc ? " anc" : isDesc ? " desc" : " dim"));
+  });
+  const pc = pathCost(id), d = DANGER[t.danger];
+  detail.innerHTML = `
+    <div class="eyebrow">Tier ${depth.get(id)}</div>
+    <h2>${esc(t.name)}</h2>
+    <span class="where" style="color:${d.c}">Research: ${esc(t.where || d.label)}</span>
+    <div class="costs">
+      <div><span>Money</span><b>${nf.format(t.money)}</b></div>
+      <div><span>CPU</span><b>${nf.format(t.cpu)}</b></div>
+      <div class="wide"><span>Total including all prerequisites · ${pc.count} techs</span><b>${nf.format(pc.money)} money · ${nf.format(pc.cpu)} CPU</b></div>
+    </div>
+    ${t.effects.length ? `<h3>Effect</h3><ul>${t.effects.map(e => `<li>${esc(e)}</li>`).join("")}</ul>` : ""}
+    ${t.unlocks.length ? `<h3>Unlocks</h3><ul>${t.unlocks.map(u => `<li>${esc(u.name)} <span>${u.kind}</span></li>`).join("")}</ul>` : ""}
+    <h3>Requires</h3>${chips(t.pre, "req")}
+    <h3>Leads to</h3>${chips(children.get(id), "next")}
+    <h3>Research notes</h3><p class="quote">${esc(t.description)}</p>
+    ${t.result ? `<p class="result">${esc(t.result)}</p>` : ""}`;
+  detail.querySelectorAll(".chip").forEach(b => b.onclick = () => select(b.dataset.id, true));
+  if (scroll) scrollToNode(id);
+}
+function scrollToNode(id) {
+  const { x, y } = xy.get(id);
+  graph.scrollTo({ left: x * zoom - graph.clientWidth / 2 + NW * zoom / 2, top: y * zoom - graph.clientHeight / 2, behavior: "smooth" });
+}
+
+document.getElementById("goal").onclick = () => goal && select(goal.id, true);
+document.getElementById("search").addEventListener("input", e => {
+  const q = e.target.value.trim().toLowerCase();
+  if (!q) { nodeEls.forEach(g => g.classList.remove("match", "dim")); return; }
+  let first = null;
+  nodeEls.forEach((g, id) => {
+    const hit = byId.get(id).name.toLowerCase().includes(q);
+    g.classList.toggle("match", hit);
+    g.classList.toggle("dim", !hit);
+    if (hit && !first) first = id;
+  });
+  edges.forEach(ed => ed.path.setAttribute("class", "edge dim"));
+  if (first) scrollToNode(first);
+});
+document.getElementById("search").addEventListener("keydown", e => {
+  if (e.key !== "Enter") return;
+  const hit = TECHS.find(t => t.name.toLowerCase().includes(e.target.value.trim().toLowerCase()));
+  if (hit) select(hit.id, true);
+});
+
+if (goal) select(goal.id);
+</script>
+
+</body>
+</html>

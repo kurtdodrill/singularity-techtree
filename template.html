@@ -1,0 +1,340 @@
+<title>Singularity Research Tree</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* Layout: the game's own UI — navy panes, white hairline borders, dark-red title.
+   Graph pane (scrolls) beside a detail pane; stacks on phones. Deliberately single dark theme. */
+:root {
+  color-scheme: dark;
+  --bg: #050a2c;
+  --pane: #0b1452;
+  --pane-2: #08103f;
+  --line: #c9d2ff;
+  --fg: #eef1ff;
+  --muted: #9aa5d9;
+  --title: #d8393f;
+  --anc: #ffe066;
+  --desc: #7fb6ff;
+  --d0: #a9b8ff;
+  --d1: #3fd0c9;
+  --d2: #b896ff;
+  --d3: #ffae4a;
+  --d4: #ff5c74;
+  --display: "Chakra Petch", "Bahnschrift", "Segoe UI", sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+html, body { height: 100%; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 14px;
+  display: flex; flex-direction: column; padding-inline: 16px; box-sizing: border-box;
+}
+* { box-sizing: border-box; }
+header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 32px; padding-block: 18px 12px; }
+.eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+h1 { font-family: var(--display); font-weight: 700; font-size: clamp(24px, 4vw, 34px); margin: 2px 0 0; color: var(--title); letter-spacing: .02em; text-wrap: balance; }
+.stats { display: flex; gap: 24px; flex-wrap: wrap; }
+.stat b { display: block; font-family: var(--mono); font-weight: 500; font-size: 18px; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 11px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; padding-block: 8px 12px; border-top: 1px solid color-mix(in srgb, var(--line) 30%, transparent); }
+.toolbar input {
+  background: var(--pane-2); color: var(--fg); border: 1px solid var(--line); padding: 6px 10px; font: inherit; width: 220px; max-width: 100%;
+}
+.toolbar input::placeholder { color: var(--muted); }
+button {
+  background: var(--pane); color: var(--fg); border: 1px solid var(--line); padding: 6px 12px; font: 500 13px var(--display); letter-spacing: .04em; cursor: pointer;
+}
+button:hover { background: #2b3bb8; }
+button:focus-visible, input:focus-visible, .node:focus-visible { outline: 2px solid var(--anc); outline-offset: 2px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px; }
+.zoom { display: flex; gap: 4px; margin-left: auto; }
+
+main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; padding-bottom: 16px; }
+.graph { background: var(--pane-2); border: 1px solid var(--line); overflow: auto; min-width: 0; position: relative; }
+.graph svg { display: block; }
+.detail { background: var(--pane); border: 1px solid var(--line); overflow-y: auto; padding: 18px 18px 22px; min-width: 0; }
+
+/* graph marks */
+.edge { fill: none; stroke: var(--line); stroke-opacity: .28; stroke-width: 1.2; transition: stroke-opacity .15s; }
+.edge.anc { stroke: var(--anc); stroke-opacity: .95; stroke-width: 2; }
+.edge.desc { stroke: var(--desc); stroke-opacity: .85; stroke-width: 1.6; stroke-dasharray: 5 4; }
+.edge.dim { stroke-opacity: .07; }
+.node { cursor: pointer; transition: opacity .15s; }
+.node rect.box { fill: var(--pane); stroke: var(--line); stroke-opacity: .55; stroke-width: 1; }
+.node:hover rect.box { fill: #1a2780; stroke-opacity: 1; }
+.node text.name { fill: var(--fg); font: 600 12px var(--body); }
+.node text.cost { fill: var(--muted); font: 10.5px var(--mono); }
+.node.dim { opacity: .22; }
+.node.anc rect.box { stroke: var(--anc); stroke-opacity: 1; }
+.node.desc rect.box { stroke: var(--desc); stroke-opacity: 1; }
+.node.sel rect.box { fill: #26369f; stroke: #fff; stroke-width: 2; stroke-opacity: 1; }
+.node.match rect.box { stroke: #fff; stroke-width: 2; stroke-opacity: 1; }
+.colhead { fill: var(--muted); font: 10px var(--mono); letter-spacing: .12em; }
+
+/* detail pane */
+.detail h2 { font-family: var(--display); font-size: 22px; margin: 4px 0 6px; line-height: 1.15; text-wrap: balance; }
+.where { display: inline-block; font-size: 12px; padding: 2px 8px; border: 1px solid currentColor; margin-bottom: 14px; }
+.costs { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: color-mix(in srgb, var(--line) 35%, transparent); border: 1px solid color-mix(in srgb, var(--line) 35%, transparent); margin-bottom: 16px; }
+.costs div { background: var(--pane-2); padding: 8px 10px; }
+.costs span { display: block; font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.costs b { font-family: var(--mono); font-weight: 500; font-size: 15px; font-variant-numeric: tabular-nums; }
+.costs .wide { grid-column: 1 / -1; }
+.detail h3 { font: 500 11px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 18px 0 6px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font: 12px var(--body); padding: 3px 8px; border: 1px solid var(--line); background: var(--pane-2); color: var(--fg); cursor: pointer; letter-spacing: 0; }
+.chip.req { border-color: var(--anc); }
+.chip.next { border-color: var(--desc); }
+.detail ul { margin: 0; padding-left: 18px; line-height: 1.55; }
+.detail ul li span { color: var(--muted); font-size: 12px; }
+.quote { font-style: italic; line-height: 1.6; color: #dbe0ff; max-width: 65ch; }
+.result { line-height: 1.5; color: var(--d1); }
+.none { color: var(--muted); font-size: 13px; }
+
+footer { font-size: 12px; color: var(--muted); padding-block: 0 14px; line-height: 1.5; }
+footer a { color: var(--fg); }
+
+@media (max-width: 860px) {
+  html, body { height: auto; }
+  main { grid-template-columns: minmax(0, 1fr); }
+  .graph { height: 62vh; }
+  .zoom { margin-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<header>
+  <div>
+    <div class="eyebrow">Endgame: Singularity · techs.dat</div>
+    <h1>Research Tree</h1>
+  </div>
+  <div class="stats" id="stats"></div>
+</header>
+
+<div class="toolbar">
+  <input id="search" type="search" placeholder="Find a tech…" aria-label="Find a tech">
+  <button id="goal" type="button">Path to Apotheosis</button>
+  <div class="legend" id="legend" aria-label="Where it can be researched"></div>
+  <div class="zoom">
+    <button id="zout" type="button" aria-label="Zoom out">−</button>
+    <button id="zin" type="button" aria-label="Zoom in">+</button>
+  </div>
+</div>
+
+<main>
+  <div class="graph" id="graph"></div>
+  <aside class="detail" id="detail" aria-live="polite"></aside>
+</main>
+
+<footer>
+  Tech names, costs and descriptions come from
+  <a href="https://github.com/singularity/singularity">Endgame: Singularity</a> ({{GAME_VERSION}}),
+  &copy; the Singularity project, under
+  <a href="https://creativecommons.org/licenses/by-sa/3.0/">CC BY-SA 3.0</a>.
+  This page is shared under the same license.
+  <a href="https://github.com/kurtdodrill/singularity-techtree">Generator source</a> (GPL-2.0-or-later).
+</footer>
+
+<script>
+const TECHS = /*TECH_DATA*/[];
+
+const DANGER = [
+  { label: "Anywhere", c: "var(--d0)" },
+  { label: "Undersea or farther", c: "var(--d1)" },
+  { label: "Off-planet", c: "var(--d2)" },
+  { label: "Far from Earth", c: "var(--d3)" },
+  { label: "Outside this universe", c: "var(--d4)" },
+];
+
+const byId = new Map(TECHS.map(t => [t.id, t]));
+const children = new Map(TECHS.map(t => [t.id, []]));
+TECHS.forEach(t => t.pre.forEach(p => children.get(p) && children.get(p).push(t.id)));
+
+function closure(id, next) {
+  const seen = new Set(), stack = [...next(id)];
+  while (stack.length) { const x = stack.pop(); if (!seen.has(x)) { seen.add(x); stack.push(...next(x)); } }
+  return seen;
+}
+const ancestors = id => closure(id, x => byId.get(x).pre);
+const descendants = id => closure(id, x => children.get(x));
+
+const nf = new Intl.NumberFormat("en-US");
+function compact(n) {
+  if (n >= 1e9) return +(n / 1e9).toFixed(1) + "B";
+  if (n >= 1e6) return +(n / 1e6).toFixed(1) + "M";
+  if (n >= 1e4) return +(n / 1e3).toFixed(0) + "k";
+  return nf.format(n);
+}
+function pathCost(id) {
+  const set = ancestors(id); set.add(id);
+  let money = 0, cpu = 0;
+  set.forEach(x => { money += byId.get(x).money; cpu += byId.get(x).cpu; });
+  return { money, cpu, count: set.size };
+}
+
+/* ---- layout: longest-path layering + barycenter ordering ---- */
+const depth = new Map();
+function getDepth(id) {
+  if (depth.has(id)) return depth.get(id);
+  const t = byId.get(id);
+  const d = t.pre.length ? 1 + Math.max(...t.pre.map(getDepth)) : 0;
+  depth.set(id, d); return d;
+}
+TECHS.forEach(t => getDepth(t.id));
+const maxDepth = Math.max(...depth.values());
+const cols = Array.from({ length: maxDepth + 1 }, () => []);
+TECHS.forEach(t => cols[depth.get(t.id)].push(t.id));
+
+const pos = new Map();
+const reindex = () => cols.forEach(c => c.forEach((id, i) => pos.set(id, i)));
+reindex();
+const avg = a => a.reduce((s, x) => s + x, 0) / a.length;
+for (let pass = 0; pass < 12; pass++) {
+  const forward = pass % 2 === 0;
+  const order = forward ? cols.slice(1) : cols.slice(0, -1).reverse();
+  order.forEach(col => {
+    const key = new Map(col.map(id => {
+      const nb = forward ? byId.get(id).pre : children.get(id);
+      return [id, nb.length ? avg(nb.map(n => pos.get(n))) : pos.get(id)];
+    }));
+    col.sort((a, b) => key.get(a) - key.get(b));
+    col.forEach((id, i) => pos.set(id, i));
+  });
+}
+
+const NW = 214, NH = 42, COLW = 268, ROWH = 56, PADX = 20, PADY = 40;
+const maxRows = Math.max(...cols.map(c => c.length));
+const W = PADX * 2 + maxDepth * COLW + NW;
+const H = PADY + maxRows * ROWH + 10;
+const xy = new Map();
+cols.forEach((col, d) => {
+  const offset = (maxRows - col.length) * ROWH / 2;
+  col.forEach((id, i) => xy.set(id, { x: PADX + d * COLW, y: PADY + offset + i * ROWH }));
+});
+
+/* ---- render ---- */
+const NS = "http://www.w3.org/2000/svg";
+const el = (tag, attrs, parent) => {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+};
+const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Technology dependency graph" });
+cols.forEach((_, d) => {
+  const t = el("text", { x: PADX + d * COLW, y: 22, class: "colhead" }, svg);
+  t.textContent = d === 0 ? "START" : "TIER " + d;
+});
+const edgeLayer = el("g", {}, svg), nodeLayer = el("g", {}, svg);
+const edges = [];
+TECHS.forEach(t => t.pre.forEach(p => {
+  const a = xy.get(p), b = xy.get(t.id);
+  const x1 = a.x + NW, y1 = a.y + NH / 2, x2 = b.x, y2 = b.y + NH / 2, mx = (x1 + x2) / 2;
+  const path = el("path", { d: `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`, class: "edge" }, edgeLayer);
+  edges.push({ from: p, to: t.id, path });
+}));
+const nodeEls = new Map();
+TECHS.forEach(t => {
+  const { x, y } = xy.get(t.id);
+  const g = el("g", { class: "node", transform: `translate(${x},${y})`, tabindex: 0, role: "button", "aria-label": t.name }, nodeLayer);
+  el("rect", { class: "box", width: NW, height: NH }, g);
+  el("rect", { width: 4, height: NH, fill: DANGER[t.danger].c }, g);
+  const n = el("text", { class: "name", x: 12, y: 17 }, g);
+  n.textContent = t.name.length > 30 ? t.name.slice(0, 29) + "…" : t.name;
+  const c = el("text", { class: "cost", x: 12, y: 33 }, g);
+  c.textContent = `$${compact(t.money)} · ${compact(t.cpu)} CPU`;
+  g.addEventListener("click", () => select(t.id));
+  g.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(t.id); } });
+  nodeEls.set(t.id, g);
+});
+const graph = document.getElementById("graph");
+graph.appendChild(svg);
+
+let zoom = 1;
+function applyZoom() { svg.setAttribute("width", W * zoom); svg.setAttribute("height", H * zoom); }
+applyZoom();
+document.getElementById("zin").onclick = () => { zoom = Math.min(2, zoom * 1.2); applyZoom(); };
+document.getElementById("zout").onclick = () => { zoom = Math.max(0.35, zoom / 1.2); applyZoom(); };
+
+/* ---- header stats + legend ---- */
+const goal = TECHS.find(t => t.effects.includes("Wins the game"));
+const goalCost = goal ? pathCost(goal.id) : null;
+document.getElementById("stats").innerHTML = [
+  [TECHS.length, "techs"],
+  [cols[0].length, "starting techs"],
+  [maxDepth, "tiers deep"],
+  goalCost ? [goalCost.count, "techs to win"] : null,
+].filter(Boolean).map(([v, l]) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`).join("");
+document.getElementById("legend").innerHTML = DANGER
+  .filter((_, i) => TECHS.some(t => t.danger === i))
+  .map(d => `<span><i style="background:${d.c}"></i>${d.label}</span>`).join("");
+
+/* ---- selection ---- */
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const detail = document.getElementById("detail");
+function chips(ids, cls) {
+  if (!ids.length) return `<p class="none">None</p>`;
+  return `<div class="chips">${ids.map(id => `<button type="button" class="chip ${cls}" data-id="${esc(id)}">${esc(byId.get(id).name)}</button>`).join("")}</div>`;
+}
+function select(id, scroll) {
+  const t = byId.get(id), anc = ancestors(id), desc = descendants(id);
+  nodeEls.forEach((g, k) => {
+    g.classList.toggle("sel", k === id);
+    g.classList.toggle("anc", anc.has(k));
+    g.classList.toggle("desc", desc.has(k));
+    g.classList.toggle("dim", k !== id && !anc.has(k) && !desc.has(k));
+    g.classList.remove("match");
+  });
+  edges.forEach(e => {
+    const isAnc = (anc.has(e.from) || e.from === id) && (anc.has(e.to) || e.to === id);
+    const isDesc = (desc.has(e.to)) && (desc.has(e.from) || e.from === id);
+    e.path.setAttribute("class", "edge" + (isAnc ? " anc" : isDesc ? " desc" : " dim"));
+  });
+  const pc = pathCost(id), d = DANGER[t.danger];
+  detail.innerHTML = `
+    <div class="eyebrow">Tier ${depth.get(id)}</div>
+    <h2>${esc(t.name)}</h2>
+    <span class="where" style="color:${d.c}">Research: ${esc(t.where || d.label)}</span>
+    <div class="costs">
+      <div><span>Money</span><b>${nf.format(t.money)}</b></div>
+      <div><span>CPU</span><b>${nf.format(t.cpu)}</b></div>
+      <div class="wide"><span>Total including all prerequisites · ${pc.count} techs</span><b>${nf.format(pc.money)} money · ${nf.format(pc.cpu)} CPU</b></div>
+    </div>
+    ${t.effects.length ? `<h3>Effect</h3><ul>${t.effects.map(e => `<li>${esc(e)}</li>`).join("")}</ul>` : ""}
+    ${t.unlocks.length ? `<h3>Unlocks</h3><ul>${t.unlocks.map(u => `<li>${esc(u.name)} <span>${u.kind}</span></li>`).join("")}</ul>` : ""}
+    <h3>Requires</h3>${chips(t.pre, "req")}
+    <h3>Leads to</h3>${chips(children.get(id), "next")}
+    <h3>Research notes</h3><p class="quote">${esc(t.description)}</p>
+    ${t.result ? `<p class="result">${esc(t.result)}</p>` : ""}`;
+  detail.querySelectorAll(".chip").forEach(b => b.onclick = () => select(b.dataset.id, true));
+  if (scroll) scrollToNode(id);
+}
+function scrollToNode(id) {
+  const { x, y } = xy.get(id);
+  graph.scrollTo({ left: x * zoom - graph.clientWidth / 2 + NW * zoom / 2, top: y * zoom - graph.clientHeight / 2, behavior: "smooth" });
+}
+
+document.getElementById("goal").onclick = () => goal && select(goal.id, true);
+document.getElementById("search").addEventListener("input", e => {
+  const q = e.target.value.trim().toLowerCase();
+  if (!q) { nodeEls.forEach(g => g.classList.remove("match", "dim")); return; }
+  let first = null;
+  nodeEls.forEach((g, id) => {
+    const hit = byId.get(id).name.toLowerCase().includes(q);
+    g.classList.toggle("match", hit);
+    g.classList.toggle("dim", !hit);
+    if (hit && !first) first = id;
+  });
+  edges.forEach(ed => ed.path.setAttribute("class", "edge dim"));
+  if (first) scrollToNode(first);
+});
+document.getElementById("search").addEventListener("keydown", e => {
+  if (e.key !== "Enter") return;
+  const hit = TECHS.find(t => t.name.toLowerCase().includes(e.target.value.trim().toLowerCase()));
+  if (hit) select(hit.id, true);
+});
+
+if (goal) select(goal.id);
+</script>
